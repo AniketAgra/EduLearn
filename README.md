@@ -111,7 +111,7 @@ Comprehensive documentation is available in the `/documentation` folder:
 - [**Deployment Guide**](../../documentation/overview/04_Deployment_Guide.md) - Production deployment
 
 ### 📄 Features
-- [**Dashboard**](../BeyondChats/documentation/pages/page_dashboard.md) - Analytics and performance tracking
+- [**Dashboard**](../BeyondChats/Documentation/pages/page_dashboard.md) - Analytics and performance tracking
 - [**PDF Viewer**](../BeyondChats/documentation/pages/page_pdf_viewer.md) - Document interaction and AI chat
 - More in `/documentation/pages/`
 
@@ -269,3 +269,4 @@ This project is licensed under the MIT License.
 
 **Version:** 1.0.0  
 **Last Updated:** October 2025
+
