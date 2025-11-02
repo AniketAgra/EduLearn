@@ -14,6 +14,7 @@ export default function NotesPanel({ pdfId, page }) {
   const [showAllPages, setShowAllPages] = useState(false)
   const mediaRecorderRef = useRef(null)
   const chunksRef = useRef([])
+  const streamRef = useRef(null)
   const timerRef = useRef(null)
 
   useEffect(() => { (async () => setItems(await notesApi.list(pdfId)))() }, [pdfId])
@@ -59,30 +60,70 @@ export default function NotesPanel({ pdfId, page }) {
   }
 
   const startRec = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    const rec = new MediaRecorder(stream)
-    rec.ondataavailable = (e) => chunksRef.current.push(e.data)
-    rec.onstop = async () => {
-      const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
-      const base64 = await blobToBase64(blob)
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('getUserMedia not supported in this browser')
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      streamRef.current = stream
+
+      // prepare chunks
       chunksRef.current = []
-      const saved = await notesApi.create({ type: 'audio', content: base64, page: page || 1, pdfId })
-      setItems((x) => [saved, ...x])
-      // Reset recording time only after save is complete
+
+      // prefer codecs when available
+      let options = undefined
+      try {
+        if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported) {
+          if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) options = { mimeType: 'audio/webm;codecs=opus' }
+          else if (MediaRecorder.isTypeSupported('audio/webm')) options = { mimeType: 'audio/webm' }
+          else if (MediaRecorder.isTypeSupported('audio/ogg')) options = { mimeType: 'audio/ogg' }
+        }
+      } catch (err) {
+        // ignore and let constructor choose default
+      }
+
+      const rec = options ? new MediaRecorder(stream, options) : new MediaRecorder(stream)
+
+      rec.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data) }
+      rec.onerror = (err) => { console.error('MediaRecorder error', err) }
+
+      rec.onstop = async () => {
+        try {
+          const blobType = (rec.mimeType && rec.mimeType.includes('webm')) ? 'audio/webm' : 'audio/ogg'
+          const blob = new Blob(chunksRef.current, { type: blobType })
+          const base64 = await blobToBase64(blob)
+          chunksRef.current = []
+          const saved = await notesApi.create({ type: 'audio', content: base64, page: page || 1, pdfId })
+          setItems((x) => [saved, ...x])
+          // Reset recording time only after save is complete
+          setRecordingTime(0)
+        } catch (err) {
+          console.error('Error saving recorded audio', err)
+        } finally {
+          // stop tracks if streamRef still present
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop())
+            streamRef.current = null
+          }
+          setShowAddModal(false)
+          setAddType(null)
+        }
+      }
+
+      mediaRecorderRef.current = rec
+      rec.start()
+      setIsRecording(true)
       setRecordingTime(0)
-      stream.getTracks().forEach(track => track.stop())
-      setShowAddModal(false)
-      setAddType(null)
+
+      // Start timer
+      timerRef.current = setInterval(() => {
+        setRecordingTime(t => t + 1)
+      }, 1000)
+    } catch (err) {
+      console.error('Could not start recording', err)
+      alert('Unable to access microphone. Please check permissions and try again.')
     }
-    mediaRecorderRef.current = rec
-    rec.start()
-    setIsRecording(true)
-    setRecordingTime(0)
-    
-    // Start timer
-    timerRef.current = setInterval(() => {
-      setRecordingTime(t => t + 1)
-    }, 1000)
   }
 
   const stopRec = () => {
@@ -106,10 +147,18 @@ export default function NotesPanel({ pdfId, page }) {
     setAddType(null)
     setText('')
     if (isRecording && mediaRecorderRef.current?.state === 'recording') {
-      mediaRecorderRef.current.stop()
+      try {
+        mediaRecorderRef.current.stop()
+      } catch (err) {
+        console.warn('Failed to stop recorder during cancel', err)
+      }
       setIsRecording(false)
       setRecordingTime(0)
       if (timerRef.current) clearInterval(timerRef.current)
+      if (streamRef.current) {
+        try { streamRef.current.getTracks().forEach(t => t.stop()) } catch(e){}
+        streamRef.current = null
+      }
     }
   }
 

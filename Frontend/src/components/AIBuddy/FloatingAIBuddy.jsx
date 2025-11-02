@@ -38,8 +38,9 @@ export default function FloatingAIBuddy({ isPDFPage = false }) {
 
   const currentMessage = messages[msgIndex]
 
-  // If on tablet/mobile (<=1024px) hide the whole AI Buddy (icon + text)
-  if (isSmallScreen) return null
+  // On small screens we still want the FAB available — only the message bubble
+  // is hidden when appropriate (see CSS and showBubble logic). Do not return
+  // early here as that would remove the icon entirely on mobile/tablet.
 
   // Hide AI buddy entirely when user is not logged in
   if (!user) return null

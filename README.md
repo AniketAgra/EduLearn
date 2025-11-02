@@ -185,6 +185,7 @@ BeyondChats/
 - Supabase Storage (PDF files)
 - MongoDB Atlas (database)
 
+
 [**Full Tech Stack →**](../BeyondChats/documentation/technical/tech_stack.md)
 
 ---
